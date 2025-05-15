@@ -828,10 +828,13 @@ int Viewer::launchInit_( const LaunchParams& params )
         spaceMouseController_->connect();
         initSpaceMouseHandler_();
 
-        if ( !touchpadController_ )
-            touchpadController_ = std::make_unique<TouchpadController>();
-        touchpadController_->connect( this );
-        touchpadController_->initialize( window );
+        //if ( !touchpadController_ )
+        //    touchpadController_ = std::make_unique<TouchpadController>();
+        if ( touchpadController_ )
+        {
+            touchpadController_->connect( this );
+            touchpadController_->initialize( window );
+        }
     }
 
     CommandLoop::setState( CommandLoop::StartPosition::AfterWindowInit );
@@ -1085,9 +1088,10 @@ const TouchpadParameters & Viewer::getTouchpadParameters() const
 
 void Viewer::setTouchpadParameters( const TouchpadParameters & ps )
 {
-    if ( !touchpadController_ )
-        touchpadController_ = std::make_unique<TouchpadController>();
-    touchpadController_->setParameters( ps );
+    //if ( !touchpadController_ )
+    //    touchpadController_ = std::make_unique<TouchpadController>();
+    if ( touchpadController_ )
+        touchpadController_->setParameters( ps );
 }
 
 SpaceMouseParameters Viewer::getSpaceMouseParameters() const
