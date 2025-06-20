@@ -146,7 +146,7 @@ if [ "${MESHLIB_BUILD_RELEASE}" = "ON" ]; then
     mkdir -p build/Release
   fi
   cd build/Release
-    cmake -S ../.. -B . -D CMAKE_BUILD_TYPE=Release ${MR_CMAKE_OPTIONS} | tee ${logfile}
+    cmake -S ../.. -B . -D CMAKE_BUILD_TYPE=RelWithDebInfo ${MR_CMAKE_OPTIONS} | tee ${logfile}
     cmake --build . -j ${NPROC} | tee ${logfile}
   cd ../..
 fi

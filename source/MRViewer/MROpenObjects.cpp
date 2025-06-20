@@ -144,6 +144,8 @@ Expected<LoadedObject> makeObjectTreeFromFolder( const std::filesystem::path & f
     auto pseudoRoot = std::make_shared<Object>();
     pseudoRoot->addChild( res.obj );
 
+    while(1)
+    {
     tbb::task_group group;
     std::atomic<int> completed;
     bool loadingCanceled = false;
@@ -174,13 +176,14 @@ Expected<LoadedObject> makeObjectTreeFromFolder( const std::filesystem::path & f
                         } );
             }
             #endif
+            spdlog::warn("Atomic \"completed\" incremented");
             completed += 1;
         } );
     }
 #if !defined( __EMSCRIPTEN__ ) || defined( __EMSCRIPTEN_PTHREADS__ )
     while ( !loadingCanceled && completed < nodes.size() )
     {
-        std::this_thread::sleep_for( std::chrono::milliseconds ( 200 ) );
+        //std::this_thread::sleep_for( std::chrono::milliseconds ( 2000 ) );
         loadingCanceled = !cb();
         if ( loadingCanceled )
             group.cancel(); // cancel faster if possible
@@ -190,6 +193,7 @@ Expected<LoadedObject> makeObjectTreeFromFolder( const std::filesystem::path & f
 
     if ( loadingCanceled )
         return unexpected( getCancelMessage( folder ) );
+    }
 
     // processing of results
     bool atLeastOneLoaded = false;
