@@ -12,17 +12,17 @@ void parallelFor( size_t begin, size_t end, FunctionRef<void ( size_t )> f )
     } );
 }
 
-void parallelFor( size_t begin, size_t end, FunctionRef<void ( void*, size_t )> f, FunctionRef<void* ()> ctx )
+void parallelFor( size_t begin, size_t end, FunctionRef<void ( size_t, void* )> f, FunctionRef<void* ()> ctx )
 {
     tbb::parallel_for( tbb::blocked_range( begin, end ), [&f, &ctx] ( const tbb::blocked_range<size_t>& range )
     {
         void* ctx_ = ctx();
         for ( auto i = range.begin(); i != range.end(); ++i )
-            f( ctx_, i );
+            f( i, ctx_ );
     } );
 }
 
-bool parallelFor( size_t begin, size_t end, FunctionRef<void ( void*, size_t )> f, FunctionRef<void* ()> ctx,
+bool parallelFor( size_t begin, size_t end, FunctionRef<void ( size_t, void* )> f, FunctionRef<void* ()> ctx,
     ProgressCallback cb, size_t reportProgressEvery )
 {
     if ( !cb )
@@ -60,7 +60,7 @@ bool parallelFor( size_t begin, size_t end, FunctionRef<void ( void*, size_t )> 
             if ( !keepGoing.load( std::memory_order_relaxed ) )
                 break;
 
-            f( ctx_, i );
+            f( i, ctx_ );
 
             if ( ( ++myProcessed % reportProgressEvery ) == 0 )
             {

@@ -16,9 +16,9 @@ namespace MR
 
 MRMESH_API void parallelFor( size_t begin, size_t end, FunctionRef<void ( size_t )> f );
 
-MRMESH_API void parallelFor( size_t begin, size_t end, FunctionRef<void ( void*, size_t )> f, FunctionRef<void* ()> ctx );
+MRMESH_API void parallelFor( size_t begin, size_t end, FunctionRef<void ( size_t, void* )> f, FunctionRef<void* ()> ctx );
 
-MRMESH_API bool parallelFor( size_t begin, size_t end, FunctionRef<void ( void*, size_t )> f, FunctionRef<void* ()> ctx,
+MRMESH_API bool parallelFor( size_t begin, size_t end, FunctionRef<void ( size_t, void* )> f, FunctionRef<void* ()> ctx,
     ProgressCallback cb, size_t reportProgressEvery = 1024 );
 
 /// executes given function f for each span element [begin, end);
@@ -36,7 +36,7 @@ inline auto ParallelFor( I begin, I end, F && f, Args && ... args )
     }
     else
     {
-        return parallelFor( begin, end, [&] ( void*, size_t i )
+        return parallelFor( begin, end, [&] ( size_t i, void* )
         {
             std::forward<F>( f )( I( i ) );
         }, [&]
@@ -53,7 +53,7 @@ inline auto ParallelFor( I begin, I end, F && f, Args && ... args )
 template <typename I, typename L, typename F, typename ...Args>
 inline auto ParallelFor( I begin, I end, tbb::enumerable_thread_specific<L> & e, F && f, Args && ... args )
 {
-    return parallelFor( begin, end, [&] ( void* ctx, size_t i )
+    return parallelFor( begin, end, [&] ( size_t i, void* ctx )
     {
         std::forward<F>( f )( I( i ), *(L*)ctx );
     }, [&]
