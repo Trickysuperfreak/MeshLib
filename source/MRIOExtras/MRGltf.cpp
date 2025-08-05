@@ -152,9 +152,9 @@ Expected<int> readVertCoords( VertCoords& vertexCoordinates, const tinygltf::Mod
     }
     else
     {
-        ParallelFor( size_t( start ), vertexCoordinates.vec_.size(), [&] ( size_t i )
+        ParallelFor( start, vertexCoordinates.endId(), [&] ( VertId v )
         {
-            vertexCoordinates.vec_[i] = *( Vector3f* )( &buffer.data[accessor.byteOffset + bufferView.byteOffset + i * bufferView.byteStride] );
+            vertexCoordinates[v] = *( Vector3f* )( &buffer.data[accessor.byteOffset + bufferView.byteOffset + (size_t)v.get() * bufferView.byteStride] );
         } );
     }
 
