@@ -2,6 +2,7 @@
 
 #include "MRBitSet.h"
 #include "MRFunctional.h"
+#include "MRParallel.h"
 #include "MRProgressCallback.h"
 
 namespace MR
