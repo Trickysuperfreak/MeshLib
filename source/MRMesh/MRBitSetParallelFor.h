@@ -27,6 +27,37 @@ struct IdRange
 namespace BitSetParallel
 {
 
+template <typename IndexType>
+inline auto blockRange( const IdRange<IndexType> & bitRange )
+{
+    const size_t beginBlock = bitRange.beg / BitSet::bits_per_block;
+    const size_t endBlock = ( size_t( bitRange.end ) + BitSet::bits_per_block - 1 ) / BitSet::bits_per_block;
+    return tbb::blocked_range<size_t>( beginBlock, endBlock );
+}
+
+template <typename BS>
+inline auto blockRange( const BS & bs )
+{
+    const size_t endBlock = ( bs.size() + BS::bits_per_block - 1 ) / BS::bits_per_block;
+    return tbb::blocked_range<size_t>( 0, endBlock );
+}
+
+template <typename BS>
+inline auto bitRange( const BS & bs )
+{
+    return IdRange<typename BS::IndexType>{ bs.beginId(), bs.endId() };
+}
+
+template <typename IndexType>
+auto bitSubRange( const IdRange<IndexType> & bitRange, const tbb::blocked_range<size_t> & range, const tbb::blocked_range<size_t> & subRange )
+{
+    return IdRange<IndexType>
+    {
+        .beg = subRange.begin() > range.begin() ? IndexType( subRange.begin() * BitSet::bits_per_block ) : bitRange.beg,
+        .end = subRange.end() < range.end()     ? IndexType( subRange.end()   * BitSet::bits_per_block ) : bitRange.end
+    };
+}
+
 using Range = tbb::blocked_range<size_t>;
 
 MRMESH_API void forAllRanged( const Range & bitRange, FunctionRef<void ( size_t, const Range & )> f );
