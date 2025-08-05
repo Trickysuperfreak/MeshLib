@@ -1,5 +1,7 @@
 #include "MRBitSetParallelFor.h"
 
+#include "MRTbbThreadMutex.h"
+
 namespace
 {
 

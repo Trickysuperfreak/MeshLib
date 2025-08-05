@@ -1,14 +1,8 @@
 #pragma once
 
 #include "MRBitSet.h"
-#include "MRParallel.h"
-#include "MRProgressCallback.h"
-#include "MRTbbThreadMutex.h"
-
-#include <atomic>
-#include <cassert>
-
 #include "MRFunctional.h"
+#include "MRProgressCallback.h"
 
 namespace MR
 {
