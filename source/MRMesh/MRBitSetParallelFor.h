@@ -8,6 +8,8 @@
 #include <atomic>
 #include <cassert>
 
+#include "MRFunctional.h"
+
 namespace MR
 {
 
@@ -25,116 +27,51 @@ struct IdRange
 namespace BitSetParallel
 {
 
-template <typename IndexType>
-inline auto blockRange( const IdRange<IndexType> & bitRange )
-{
-    const size_t beginBlock = bitRange.beg / BitSet::bits_per_block;
-    const size_t endBlock = ( size_t( bitRange.end ) + BitSet::bits_per_block - 1 ) / BitSet::bits_per_block;
-    return tbb::blocked_range<size_t>( beginBlock, endBlock );
-}
+using Range = tbb::blocked_range<size_t>;
 
-template <typename BS>
-inline auto blockRange( const BS & bs )
-{
-    const size_t endBlock = ( bs.size() + BS::bits_per_block - 1 ) / BS::bits_per_block;
-    return tbb::blocked_range<size_t>( 0, endBlock );
-}
+MRMESH_API void forAllRanged( const Range & bitRange, FunctionRef<void ( size_t, const Range & )> f );
 
-template <typename BS>
-inline auto bitRange( const BS & bs )
-{
-    return IdRange<typename BS::IndexType>{ bs.beginId(), bs.endId() };
-}
+MRMESH_API void forAllRanged( const Range & bitRange, FunctionRef<void ( size_t, const Range &, void* )> f,
+    FunctionRef<void* ()> ctx );
 
-template <typename IndexType>
-auto bitSubRange( const IdRange<IndexType> & bitRange, const tbb::blocked_range<size_t> & range, const tbb::blocked_range<size_t> & subRange )
+MRMESH_API bool forAllRanged( const Range & bitRange, FunctionRef<void ( size_t, const Range &, void* )> f,
+    FunctionRef<void* ()> ctx, ProgressCallback progressCb, size_t reportProgressEveryBit = 1024 );
+
+template <typename BS, typename F, typename ...Cb>
+auto ForAllRanged( const BS & bs, F && f, Cb && ... cb )
 {
-    return IdRange<IndexType>
+    if constexpr ( sizeof...( cb ) == 0 )
     {
-        .beg = subRange.begin() > range.begin() ? IndexType( subRange.begin() * BitSet::bits_per_block ) : bitRange.beg,
-        .end = subRange.end() < range.end()     ? IndexType( subRange.end()   * BitSet::bits_per_block ) : bitRange.end
-    };
-}
-
-template <typename IndexType, typename CM, typename F>
-void ForAllRanged( const IdRange<IndexType> & bitRange, const CM & callMaker, F && f )
-{
-    const auto range = BitSetParallel::blockRange( bitRange );
-    tbb::parallel_for( range, [&]( const tbb::blocked_range<size_t> & subRange )
-    {
-        auto c = callMaker();
-        const auto bitSubRange = BitSetParallel::bitSubRange( bitRange, range, subRange );
-        for ( auto id = bitSubRange.beg; id < bitSubRange.end; ++id )
-            c( f, id, bitSubRange );
-    } );
-}
-
-template <typename BS, typename CM, typename F>
-inline void ForAllRanged( const BS & bs, const CM & callMaker, F && f )
-{
-    ForAllRanged( bitRange( bs ), callMaker, std::forward<F>( f ) );
-}
-
-template <typename IndexType, typename CM, typename F> 
-bool ForAllRanged( const IdRange<IndexType> & bitRange, const CM & callMaker, F && f, ProgressCallback progressCb, size_t reportProgressEveryBit = 1024 )
-{
-    if ( !progressCb )
-    {
-        ForAllRanged( bitRange, callMaker, std::forward<F>( f ) );
-        return true;
-    }
-
-    TbbThreadMutex callingThreadMutex;
-    std::atomic<bool> keepGoing{ true };
-
-    // avoid false sharing with other local variables
-    // by putting processedBits in its own cache line
-    constexpr int hardware_destructive_interference_size = 64;
-    struct alignas( hardware_destructive_interference_size ) S
-    {
-        std::atomic<size_t> processedBits{ 0 };
-    } s;
-    static_assert( alignof( S ) == hardware_destructive_interference_size );
-    static_assert( sizeof( S ) == hardware_destructive_interference_size );
-
-    const auto range = BitSetParallel::blockRange( bitRange );
-    tbb::parallel_for( range, [&] ( const tbb::blocked_range<size_t>& subRange )
-    {
-        const auto bitSubRange = BitSetParallel::bitSubRange( bitRange, range, subRange );
-        size_t myProcessedBits = 0;
-        const auto callingThreadLock = callingThreadMutex.tryLock();
-        const bool report = progressCb && callingThreadLock;
-        auto c = callMaker();
-        for ( auto id = bitSubRange.beg; id < bitSubRange.end; ++id )
+        return forAllRanged( { (size_t)bs.beginId(), (size_t)bs.endId() }, [&] ( size_t i, const Range& range )
         {
-            if ( !keepGoing.load( std::memory_order_relaxed ) )
-                break;
-            c( f, id, bitSubRange );
-            if ( ( ++myProcessedBits % reportProgressEveryBit ) == 0 )
-            {
-                if ( report )
-                {
-                    if ( !progressCb( float( myProcessedBits + s.processedBits.load( std::memory_order_relaxed ) ) / bitRange.size() ) )
-                        keepGoing.store( false, std::memory_order_relaxed );
-                }
-                else
-                {
-                    s.processedBits.fetch_add( myProcessedBits, std::memory_order_relaxed );
-                    myProcessedBits = 0;
-                }
-            }
-        }
-        const auto total = myProcessedBits + s.processedBits.fetch_add( myProcessedBits, std::memory_order_relaxed );
-        if ( report && !progressCb( float( total ) / bitRange.size() ) )
-            keepGoing.store( false, std::memory_order_relaxed );
-    } );
-    return keepGoing.load( std::memory_order_relaxed );
+            using Id = typename BS::IndexType;
+            std::forward<F>( f )( Id{ i }, IdRange<Id>{ Id{ range.begin() }, Id{ range.end() } } );
+        } );
+    }
+    else
+    {
+        return forAllRanged( { (size_t)bs.beginId(), (size_t)bs.endId() }, [&] ( size_t i, const Range& range, void* )
+        {
+            using Id = typename BS::IndexType;
+            std::forward<F>( f )( Id{ i }, IdRange<Id>{ Id{ range.begin() }, Id{ range.end() } } );
+        }, [&]
+        {
+            return nullptr;
+        }, std::forward<Cb>( cb )... );
+    }
 }
 
-template <typename BS, typename CM, typename F>
-inline bool ForAllRanged( const BS & bs, const CM & callMaker, F && f, ProgressCallback progressCb, size_t reportProgressEveryBit = 1024 )
+template <typename BS, typename L, typename F, typename ...Cb>
+auto ForAllRanged( const BS & bs, tbb::enumerable_thread_specific<L>& e, F && f, Cb && ... cb )
 {
-    return ForAllRanged( bitRange( bs ), callMaker, std::forward<F>( f ), progressCb, reportProgressEveryBit );
+    return forAllRanged( { (size_t)bs.beginId(), (size_t)bs.endId() }, [&] ( size_t i, const Range& range, void* ctx )
+    {
+        using Id = typename BS::IndexType;
+        std::forward<F>( f )( Id{ i }, IdRange<Id>{ Id{ range.begin() }, Id{ range.end() } }, *(L*)ctx );
+    }, [&]
+    {
+        return (void*)&e.local();
+    }, std::forward<Cb>( cb )... );
 }
 
 } // namespace BitSetParallel
@@ -147,7 +84,7 @@ inline bool ForAllRanged( const BS & bs, const CM & callMaker, F && f, ProgressC
 template <typename BS, typename ...F>
 inline auto BitSetParallelForAllRanged( const BS & bs, F &&... f )
 {
-    return BitSetParallel::ForAllRanged( bs, Parallel::CallSimplyMaker{}, std::forward<F>( f )... );
+    return BitSetParallel::ForAllRanged( bs, std::forward<F>( f )... );
 }
 
 /// executes given function f( bit, subBitRange, tls ) for each bit in IdRange or BitSet (bs) in parallel threads,
@@ -159,7 +96,7 @@ inline auto BitSetParallelForAllRanged( const BS & bs, F &&... f )
 template <typename BS, typename L, typename ...F>
 inline auto BitSetParallelForAllRanged( const BS & bs, tbb::enumerable_thread_specific<L> & e, F &&... f )
 {
-    return BitSetParallel::ForAllRanged( bs, Parallel::CallWithTLSMaker<L>{ e }, std::forward<F>( f )... );
+    return BitSetParallel::ForAllRanged( bs, e, std::forward<F>( f )... );
 }
 
 /// executes given function f for each index in IdRange or BitSet (bs) in parallel threads;
@@ -169,7 +106,7 @@ inline auto BitSetParallelForAllRanged( const BS & bs, tbb::enumerable_thread_sp
 template <typename BS, typename F, typename ...Cb>
 inline auto BitSetParallelForAll( const BS & bs, F && f, Cb&&... cb )
 {
-    return BitSetParallel::ForAllRanged( bs, Parallel::CallSimplyMaker{}, [&f]( auto bit, auto && ) { f( bit ); }, std::forward<Cb>( cb )... );
+    return BitSetParallel::ForAllRanged( bs, [&] ( auto bit, auto && ) { std::forward<F>( f )( bit ); }, std::forward<Cb>( cb )... );
 }
 
 /// executes given function f for each index in IdRange or BitSet (bs) in parallel threads
@@ -180,7 +117,7 @@ inline auto BitSetParallelForAll( const BS & bs, F && f, Cb&&... cb )
 template <typename BS, typename L, typename F, typename ...Cb>
 inline auto BitSetParallelForAll( const BS & bs, tbb::enumerable_thread_specific<L> & e, F && f, Cb&&... cb )
 {
-    return BitSetParallel::ForAllRanged( bs, Parallel::CallWithTLSMaker<L>{ e }, [&f]( auto bit, auto &&, auto & tls ) { f( bit, tls ); }, std::forward<Cb>( cb )... );
+    return BitSetParallel::ForAllRanged( bs, e, [&] ( auto bit, auto &&, auto & tls ) { std::forward<F>( f )( bit, tls ); }, std::forward<Cb>( cb )... );
 }
 
 /// executes given function f for every _set_ bit in IdRange or BitSet (bs) in parallel threads;
@@ -190,7 +127,7 @@ inline auto BitSetParallelForAll( const BS & bs, tbb::enumerable_thread_specific
 template <typename BS, typename F, typename ...Cb>
 inline auto BitSetParallelFor( const BS& bs, F && f, Cb&&... cb )
 {
-    return BitSetParallelForAll( bs, [&]( auto bit ) { if ( bs.test( bit ) ) f( bit ); }, std::forward<Cb>( cb )... );
+    return BitSetParallelForAll( bs, [&] ( auto bit ) { if ( bs.test( bit ) ) std::forward<F>( f )( bit ); }, std::forward<Cb>( cb )... );
 }
 
 /// executes given function f for every _set_ bit in bs IdRange or BitSet (bs) parallel threads,
@@ -201,7 +138,7 @@ inline auto BitSetParallelFor( const BS& bs, F && f, Cb&&... cb )
 template <typename BS, typename L, typename F, typename ...Cb>
 inline auto BitSetParallelFor( const BS& bs, tbb::enumerable_thread_specific<L> & e, F && f, Cb&&... cb )
 {
-    return BitSetParallelForAll( bs, e, [&]( auto bit, auto & tls ) { if ( bs.test( bit ) ) f( bit, tls ); }, std::forward<Cb>( cb )... );
+    return BitSetParallelForAll( bs, e, [&] ( auto bit, auto & tls ) { if ( bs.test( bit ) ) std::forward<F>( f )( bit, tls ); }, std::forward<Cb>( cb )... );
 }
 
 /// \}
