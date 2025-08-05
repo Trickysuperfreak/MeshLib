@@ -430,6 +430,7 @@
     <ClInclude Include="MROffsetVerts.h" />
     <ClInclude Include="MREndMill.h" />
     <ClInclude Include="MRSolidOfRevolution.h" />
+    <ClInclude Include="MRFunctional.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="MRDirMax.cpp" />
@@ -718,6 +719,8 @@
     <ClCompile Include="MREndMill.cpp" />
     <ClCompile Include="MRCylinderApproximator.cpp" />
     <ClCompile Include="MRSolidOfRevolution.cpp" />
+    <ClCompile Include="MRBitSetParallelFor.cpp" />
+    <ClCompile Include="MRParallelFor.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\MRPch\MRPch.vcxproj">
