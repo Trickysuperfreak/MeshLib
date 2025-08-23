@@ -565,29 +565,34 @@ void Pdf::addRow( const std::vector<Cell>& cells )
 
 void Pdf::addText_( const std::string& text, const TextParams& textParams )
 {
-    if ( text.empty() )
-        return;
-
     if ( !state_->document )
     {
-        spdlog::warn( "Can't add text to pdf page: no valid document" );
+        spdlog::warn( "Pdf: Can't add text to pdf page: no valid document" );
+        return;
+    }
+    if ( !state_->activePage )
+    {
+        spdlog::warn( "Pdf: Can't add text to pdf page: no valid page" );
         return;
     }
 
-    MR_HPDF_CHECK_RES_STATUS( HPDF_Page_SetFontAndSize( state_->activePage, textParams.font, textParams.fontSize ) );
+    // draw text
+    {
+        MR_HPDF_CHECK_RES_STATUS( HPDF_Page_SetFontAndSize( state_->activePage, textParams.font, textParams.fontSize ) );
 
-    int strNum = calcTextLinesCount_( text );
-    const auto textHeight = static_cast< HPDF_REAL >( textParams.fontSize * strNum * lineSpacingScale );
+        int strNum = calcTextLinesCount_( text );
+        const auto textHeight = static_cast< HPDF_REAL >( textParams.fontSize * strNum * lineSpacingScale );
 
-    // need add the ability to transfer text between pages
-    if ( cursorY_ - textHeight < borderFieldBottom )
-        newPage();
+        // need add the ability to transfer text between pages
+        if ( cursorY_ - textHeight < borderFieldBottom )
+            newPage();
 
-    MR_HPDF_CHECK_RES_STATUS( HPDF_Page_BeginText( state_->activePage ) );
-    MR_HPDF_CHECK_RES_STATUS( HPDF_Page_SetTextLeading( state_->activePage, textParams.fontSize * lineSpacingScale ) );
+        MR_HPDF_CHECK_RES_STATUS( HPDF_Page_BeginText( state_->activePage ) );
+        MR_HPDF_CHECK_RES_STATUS( HPDF_Page_SetTextLeading( state_->activePage, textParams.fontSize * lineSpacingScale ) );
 
-    MR_HPDF_CHECK_RES_STATUS( HPDF_Page_TextRect( state_->activePage, cursorX_, cursorY_, cursorX_ + pageWorkWidth, cursorY_ - textHeight, text.c_str(), textParams.alignment, nullptr ) );
-    MR_HPDF_CHECK_RES_STATUS( HPDF_Page_EndText( state_->activePage ) );
+        MR_HPDF_CHECK_RES_STATUS( HPDF_Page_TextRect( state_->activePage, cursorX_, cursorY_, cursorX_ + pageWorkWidth, cursorY_ - textHeight, text.c_str(), textParams.alignment, nullptr ) );
+        MR_HPDF_CHECK_RES_STATUS( HPDF_Page_EndText( state_->activePage ) );
+    }
 
     if ( textParams.drawBorder )
     {
