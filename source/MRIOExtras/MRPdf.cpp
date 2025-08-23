@@ -204,18 +204,23 @@ struct Pdf::TextParams
     HPDF_Font font = nullptr;
     float fontSize = 14.f;
     HPDF_TextAlignment alignment = HPDF_TALIGN_LEFT;
-    bool drawBorder = false;
+
+    Color colorText = Color::black();
+    Color colorBorder = Color::transparent();
+    Color colorBackground = Color::transparent();
+
+
     static TextParams title( const Pdf& pdf )
     {
-        return TextParams{ pdf.state_->defaultFont, pdf.params_.titleSize, HPDF_TALIGN_CENTER };
+        return { .font = pdf.state_->defaultFont, .fontSize = pdf.params_.titleSize, .alignment = HPDF_TALIGN_CENTER };
     }
     static TextParams text( const Pdf& pdf )
     {
-        return TextParams{ pdf.state_->defaultFont, pdf.params_.textSize, HPDF_TALIGN_LEFT };
+        return { .font = pdf.state_->defaultFont, .fontSize = pdf.params_.textSize };
     }
     static TextParams table( const Pdf& pdf )
     {
-        return TextParams{ pdf.state_->tableFont, pdf.params_.textSize, HPDF_TALIGN_LEFT };
+        return { .font = pdf.state_->tableFont, .fontSize = pdf.params_.textSize };
     }
 };
 
@@ -515,6 +520,49 @@ Pdf::operator bool() const
     return state_->document != 0;
 }
 
+void Pdf::setTableColumnCounts( int columnCount )
+{
+    if ( columnCount < 1 )
+        return;
+    columnCount_ = columnCount;
+    formats_.resize( columnCount_, "{}" );
+}
+
+void Pdf::setTableColumnWidthsAuto()
+{
+
+}
+
+void Pdf::addTableTitles( const std::vector<std::string>& /*titles*/ )
+{
+
+}
+
+void Pdf::setRowValuesFormat( const std::vector<std::string>& formats )
+{
+    if ( formats.size() != columnCount_ )
+        return;
+    formats_ = formats;
+}
+
+void Pdf::addRow( const std::vector<Cell>& cells )
+{
+    if ( cells.size() != columnCount_ )
+    {
+        spdlog::warn( "Pdf: Error adding table row: wrong parameters count." );
+        return;
+    }
+
+    std::vector<std::string> strings;
+    for ( size_t i = 0; i < cells.size(); ++i )
+    {
+        strings.push_back( cells[i].toString( formats_[i] ) );
+    }
+
+    // add text
+
+}
+
 void Pdf::addText_( const std::string& text, const TextParams& textParams )
 {
     if ( text.empty() )
@@ -590,6 +638,11 @@ void Pdf::moveCursorToNewLine()
         cursorX_ = borderFieldLeft;
         cursorY_ -= spacing;
     }
+}
+
+void Pdf::drawTableCell_( const std::string& /*text*/ )
+{
+
 }
 
 }

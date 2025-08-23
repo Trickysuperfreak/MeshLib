@@ -113,6 +113,28 @@ public:
     /// Checking the ability to work with a document
     MRIOEXTRAS_API operator bool() const;
 
+    // Table part
+    struct Cell {
+        using Value = std::variant<int, float, bool, std::string>;
+        Value data;
+
+        template<typename T>
+        Cell( T value ) : data( value ) {}
+
+        std::string toString( const std::string& fmt_str = "{}" ) const
+        {
+            return std::visit( [&] ( const auto& val )
+            {
+                return fmt::format( fmt_str, val );
+            }, data );
+        }
+    };
+    MRIOEXTRAS_API void setTableColumnCounts( int columnCount );
+    MRIOEXTRAS_API void setTableColumnWidthsAuto();
+    MRIOEXTRAS_API void addTableTitles( const std::vector<std::string>& titles );
+    MRIOEXTRAS_API void setRowValuesFormat( const std::vector<std::string>& formats );
+    MRIOEXTRAS_API void addRow( const std::vector<Cell>& cells );
+
 private:
     struct TextParams;
     // common method for adding different types of text
@@ -134,6 +156,29 @@ private:
 
     bool checkDocument() const;
     void moveCursorToNewLine();
+
+    // table parts
+    int columnCount_ = 1;
+    std::vector<float> columnWidths = { 100 };
+    std::vector<std::string> formats_ = { "{}" };
+
+    void drawTableCell_( const std::string& text );
+
+
+    //std::vector<std::string> formats;
+    //std::vector<std::vector<std::string>> rows;
+
+    //// end recursive
+    //void formatArgs(std::vector<std::string>&, size_t) {}
+
+    //// recursive format
+    //template<typename T, typename... Rest>
+    //void formatArgs( std::vector<std::string>& out, size_t index, T&& value, Rest&&... rest )
+    //{
+    //    std::string fmt = ( index < formats.size() ) ? formats[index] : "{}";
+    //    out.push_back( fmt::format( fmt, std::forward<T>( value ) ) );
+    //    formatArgs( out, index + 1, std::forward<Rest>( rest )... );
+    //}
 };
 
 }
