@@ -2,6 +2,7 @@
 #include "MRViewer/ImGuiHelpers.h"
 #include "MRViewer/MRRibbonRegisterItem.h"
 #include "MRViewer/MRUIStyle.h"
+#include "MRViewer/MRViewer.h"
 #include "MRViewer/MRViewerInstance.h"
 #include "MRViewer/MRViewport.h"
 #include "MRViewer/MRAppendHistory.h"
@@ -31,6 +32,7 @@ private:
     void postDraw_() override;
     /// returns true only if on the top of undo stack there is not our own action (not to make new undo on each frame)
     bool shouldCreateNewHistoryAction_( const std::vector<std::shared_ptr<Object>>& selObjs ) const;
+    void update_();
 
     float rotationSpeed_ = 5 * PI_F / 180;
     bool rotateCamera_ = true;
@@ -42,6 +44,7 @@ private:
 RotatorPlugin::RotatorPlugin() :
     StateListenerPlugin( "Rotator" )
 {
+    getViewerInstance().preSetupViewSignal.connect([this] { update_(); });
 }
 
 void RotatorPlugin::drawDialog( float menuScaling, ImGuiContext* )
@@ -107,7 +110,7 @@ MR::AffineXf3f worldToBasis(
     return { rotation, basisOrigin };
 }
 
-void RotatorPlugin::preDraw_()
+void RotatorPlugin::update_()
 {
     incrementForceRedrawFrames();
 
@@ -147,6 +150,11 @@ void RotatorPlugin::preDraw_()
         
         incrementForceRedrawFrames();
     }
+}
+
+void RotatorPlugin::preDraw_()
+{
+    //update_();
 
 /*
     auto & viewport = Viewport::get();
@@ -187,44 +195,7 @@ void RotatorPlugin::preDraw_()
 void RotatorPlugin::postDraw_()
 {
   /*
-    incrementForceRedrawFrames();
-
-    if ( !label_ )
-    {
-        label_ = std::make_shared<MR::ObjectLabel>();
-        PositionedText txtOcclusal;
-        txtOcclusal.position = MR::Vector3f{ 0, .5f, 0 };
-        txtOcclusal.text = "One";
-        label_->setLabel( txtOcclusal );
-        label_->setVisualizeProperty( false, MR::VisualizeMaskType::DepthTest, MR::ViewportMask::all() );
-        label_->setVisualizeProperty(
-            true, MR::LabelVisualizePropertyType::Contour, MR::ViewportMask::all() );
-        label_->setAncillary( true );
-        label_->setPickable( false );
-        label_->setVisible( true );
-        MR::SceneRoot::get().addChild( label_ );
-    }
-
-    auto& viewport1 = Viewport::get( ViewportId( 1 ) );
-    auto& viewport2 = Viewport::get( ViewportId( 2 ) );
-
-    viewport2.setCameraTrackballAngle( viewport1.getParameters().cameraTrackballAngle );
-
-    if ( label_ )
-    {
-        auto up = viewport1.getUpDirection();
-        auto back = viewport1.getBackwardDirection();
-        auto cameraTranslation = viewport1.getParameters().cameraTranslation;
-
-        auto moveXf = worldToBasis( back, up, {} );
-        moveXf.b -= cameraTranslation;
-        label_->setXf( moveXf );
-
-        viewport2.cameraLookAlong( back, up );
-        viewport2.setCameraTranslation( cameraTranslation );
-        
-        incrementForceRedrawFrames();
-    }
+    update_();
     */
 }
 
