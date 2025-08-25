@@ -17,7 +17,7 @@
 namespace MR
 {
 
-class RotatorPlugin : public StateListenerPlugin<PreDrawListener, PostDrawListener>
+class RotatorPlugin : public StateListenerPlugin<PreDrawListener, PostDrawListener, PreSetupViewListener>
 {
 public:
     RotatorPlugin();
@@ -28,11 +28,11 @@ public:
 private:
     bool onEnable_() override;
     bool onDisable_() override;
+    void preSetupView_() override; // update second viewport according to first one
     void preDraw_() override;
     void postDraw_() override;
     /// returns true only if on the top of undo stack there is not our own action (not to make new undo on each frame)
     bool shouldCreateNewHistoryAction_( const std::vector<std::shared_ptr<Object>>& selObjs ) const;
-    void update_();
 
     float rotationSpeed_ = 5 * PI_F / 180;
     bool rotateCamera_ = true;
@@ -44,7 +44,6 @@ private:
 RotatorPlugin::RotatorPlugin() :
     StateListenerPlugin( "Rotator" )
 {
-    getViewerInstance().preSetupViewSignal.connect([this] { update_(); });
 }
 
 void RotatorPlugin::drawDialog( float menuScaling, ImGuiContext* )
@@ -72,6 +71,23 @@ bool RotatorPlugin::onDisable_()
 {
     myLastHistoryAction_.reset();
     return true;
+}
+
+void RotatorPlugin::preSetupView_()
+{
+    if ( !getViewerInstance().getPresentViewports().contains( ViewportId( 2 ) ) )
+        return;
+
+    auto& viewport1 = Viewport::get( ViewportId( 1 ) );
+    auto& viewport2 = Viewport::get( ViewportId( 2 ) );
+
+    auto thisFraneRotation = Matrix3f( viewport1.getParameters().cameraTrackballAngle );
+    auto up = thisFraneRotation.y;
+    auto back = thisFraneRotation.z;
+    auto cameraTranslation = viewport1.getParameters().cameraTranslation;
+
+    viewport2.cameraLookAlong( back, up );
+    viewport2.setCameraTranslation( cameraTranslation );
 }
 
 bool RotatorPlugin::shouldCreateNewHistoryAction_( const std::vector<std::shared_ptr<Object>>& selObjs ) const
@@ -110,10 +126,8 @@ MR::AffineXf3f worldToBasis(
     return { rotation, basisOrigin };
 }
 
-void RotatorPlugin::update_()
+void RotatorPlugin::preDraw_()
 {
-    incrementForceRedrawFrames();
-
     if ( !label_ )
     {
         label_ = std::make_shared<MR::ObjectLabel>();
@@ -130,30 +144,16 @@ void RotatorPlugin::update_()
         MR::SceneRoot::get().addChild( label_ );
     }
 
-    auto& viewport1 = Viewport::get( ViewportId( 1 ) );
-    auto& viewport2 = Viewport::get( ViewportId( 2 ) );
+    assert( label_ );
 
-    viewport2.setCameraTrackballAngle( viewport1.getParameters().cameraTrackballAngle );
-
-    if ( label_ )
+    for ( auto vpId : getViewerInstance().getPresentViewports() )
     {
-        auto up = viewport1.getUpDirection();
-        auto back = viewport1.getBackwardDirection();
-        auto cameraTranslation = viewport1.getParameters().cameraTranslation;
-
-        auto moveXf = worldToBasis( back, up, {} );
-        moveXf.b -= cameraTranslation;
-        label_->setXf( moveXf );
-
-        viewport2.cameraLookAlong( back, up );
-        viewport2.setCameraTranslation( cameraTranslation );
-        
-        incrementForceRedrawFrames();
+        auto& vp = Viewport::get( vpId );
+        auto thisFrameViewXf = vp.getViewXf();
+        auto moveXf = worldToBasis( thisFrameViewXf.A.y.normalized(), thisFrameViewXf.A.z.normalized(), {});
+        moveXf.b -= vp.getParameters().cameraTranslation;
+        label_->setXf( moveXf, vpId );
     }
-}
-
-void RotatorPlugin::preDraw_()
-{
     //update_();
 
 /*
