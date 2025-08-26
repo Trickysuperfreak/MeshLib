@@ -112,7 +112,8 @@ public:
 
     /// Checking the ability to work with a document
     MRIOEXTRAS_API operator bool() const;
-
+    
+    /*
     // Table part
     struct Cell {
         using Value = std::variant<int, float, bool, std::string>;
@@ -134,11 +135,18 @@ public:
     MRIOEXTRAS_API void addTableTitles( const std::vector<std::string>& titles );
     MRIOEXTRAS_API void setRowValuesFormat( const std::vector<std::string>& formats );
     MRIOEXTRAS_API void addRow( const std::vector<Cell>& cells );
-
+    */
 private:
     struct TextParams;
     // common method for adding different types of text
     void addText_( const std::string& text, const TextParams& params );
+
+    void drawTextRect_( const std::string& text, const Box2f& rect, const TextParams& params );
+    void drawRect_( const Box2f& rect, const Color& fillColor, const Color& strokeColor );
+
+    struct TextCellParams;
+    void drawTextCell_( const std::string& text, const TextCellParams& params );
+
 
     // close pdf document without saving. After this impossible add anything in document.
     void reset_();
@@ -154,7 +162,7 @@ private:
     float cursorX_ = 0;
     float cursorY_ = 0;
 
-    bool checkDocument() const;
+    bool checkDocument_( const std::string& action ) const;
     void moveCursorToNewLine();
 
     // table parts

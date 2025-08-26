@@ -204,11 +204,7 @@ struct Pdf::TextParams
     HPDF_Font font = nullptr;
     float fontSize = 14.f;
     HPDF_TextAlignment alignment = HPDF_TALIGN_LEFT;
-
     Color colorText = Color::black();
-    Color colorBorder = Color::transparent();
-    Color colorBackground = Color::transparent();
-
 
     static TextParams title( const Pdf& pdf )
     {
@@ -222,6 +218,16 @@ struct Pdf::TextParams
     {
         return { .font = pdf.state_->tableFont, .fontSize = pdf.params_.textSize };
     }
+};
+
+struct Pdf::TextCellParams
+{
+    TextParams textParams;
+
+    Box2f rect;
+    Color colorBorder = Color::transparent();
+    Color colorBackground = Color::transparent();
+
 };
 
 Pdf::Pdf( const PdfParameters& params /*= PdfParameters()*/ )
@@ -520,6 +526,8 @@ Pdf::operator bool() const
     return state_->document != 0;
 }
 
+/*
+
 void Pdf::setTableColumnCounts( int columnCount )
 {
     if ( columnCount < 1 )
@@ -533,7 +541,7 @@ void Pdf::setTableColumnWidthsAuto()
 
 }
 
-void Pdf::addTableTitles( const std::vector<std::string>& /*titles*/ )
+void Pdf::addTableTitles( const std::vector<std::string>& titles )
 {
 
 }
@@ -563,45 +571,91 @@ void Pdf::addRow( const std::vector<Cell>& cells )
 
 }
 
+*/
+
 void Pdf::addText_( const std::string& text, const TextParams& textParams )
 {
-    if ( !state_->document )
-    {
-        spdlog::warn( "Pdf: Can't add text to pdf page: no valid document" );
+    if ( !checkDocument_( "add text" ) )
         return;
-    }
-    if ( !state_->activePage )
-    {
-        spdlog::warn( "Pdf: Can't add text to pdf page: no valid page" );
-        return;
-    }
+
 
     // draw text
-    {
-        MR_HPDF_CHECK_RES_STATUS( HPDF_Page_SetFontAndSize( state_->activePage, textParams.font, textParams.fontSize ) );
+    if ( !textParams.colorText.a )
+        return;
 
-        int strNum = calcTextLinesCount_( text );
-        const auto textHeight = static_cast< HPDF_REAL >( textParams.fontSize * strNum * lineSpacingScale );
 
-        // need add the ability to transfer text between pages
-        if ( cursorY_ - textHeight < borderFieldBottom )
-            newPage();
+    //MR_HPDF_CHECK_RES_STATUS( HPDF_Page_SetFontAndSize( state_->activePage, textParams.font, textParams.fontSize ) );
 
-        MR_HPDF_CHECK_RES_STATUS( HPDF_Page_BeginText( state_->activePage ) );
-        MR_HPDF_CHECK_RES_STATUS( HPDF_Page_SetTextLeading( state_->activePage, textParams.fontSize * lineSpacingScale ) );
+    int strNum = calcTextLinesCount_( text );
+    const auto textHeight = static_cast< HPDF_REAL >( textParams.fontSize * strNum * lineSpacingScale );
 
-        MR_HPDF_CHECK_RES_STATUS( HPDF_Page_TextRect( state_->activePage, cursorX_, cursorY_, cursorX_ + pageWorkWidth, cursorY_ - textHeight, text.c_str(), textParams.alignment, nullptr ) );
-        MR_HPDF_CHECK_RES_STATUS( HPDF_Page_EndText( state_->activePage ) );
-    }
+    // need add the ability to transfer text between pages
+    if ( cursorY_ - textHeight < borderFieldBottom )
+        newPage();
 
-    if ( textParams.drawBorder )
-    {
-        MR_HPDF_CHECK_RES_STATUS( HPDF_Page_Rectangle( state_->activePage, cursorX_, cursorY_ - textHeight, pageWorkWidth, textHeight ) );
-        MR_HPDF_CHECK_RES_STATUS( HPDF_Page_Stroke( state_->activePage ) );
-    }
+    Box2f rect;
+    rect.include( { cursorX_, cursorY_ } );
+    rect.include( { borderFieldRight, cursorY_ - textHeight } );
+    drawTextRect_( text, rect, textParams );
+
+    //MR_HPDF_CHECK_RES_STATUS( HPDF_Page_BeginText( state_->activePage ) );
+    //MR_HPDF_CHECK_RES_STATUS( HPDF_Page_SetTextLeading( state_->activePage, textParams.fontSize * lineSpacingScale ) );
+
+    //MR_HPDF_CHECK_RES_STATUS( HPDF_Page_TextRect( state_->activePage, cursorX_, cursorY_, cursorX_ + pageWorkWidth, cursorY_ - textHeight, text.c_str(), textParams.alignment, nullptr ) );
+    //MR_HPDF_CHECK_RES_STATUS( HPDF_Page_EndText( state_->activePage ) );
+
+
 
     cursorY_ -= textHeight;
     moveCursorToNewLine();
+}
+
+void Pdf::drawTextRect_( const std::string& text, const Box2f& rect, const TextParams& params )
+{
+    if ( !checkDocument_( "draw text (rect)" ) )
+        return;
+
+    if ( text.empty() || !params.colorText.a )
+        return;
+
+    MR_HPDF_CHECK_RES_STATUS( HPDF_Page_SetFontAndSize( state_->activePage, params.font, params.fontSize ) );
+    MR_HPDF_CHECK_RES_STATUS( HPDF_Page_SetTextLeading( state_->activePage, params.fontSize * lineSpacingScale ) );
+
+    Vector4f c = Vector4f( params.colorText );
+    HPDF_Page_SetRGBFill( state_->activePage, c.x, c.y, c.z );
+
+    MR_HPDF_CHECK_RES_STATUS( HPDF_Page_BeginText( state_->activePage ) );
+    MR_HPDF_CHECK_RES_STATUS( HPDF_Page_TextRect( state_->activePage, rect.min.x, rect.max.y, rect.max.x, rect.min.y, text.c_str(), params.alignment, nullptr ) );
+    MR_HPDF_CHECK_RES_STATUS( HPDF_Page_EndText( state_->activePage ) );
+
+
+}
+
+void Pdf::drawRect_( const Box2f& rect, const Color& fillColor, const Color& strokeColor )
+{
+    if ( !checkDocument_( "draw rect" ) )
+        return;
+
+    if ( fillColor.a )
+    {
+        Vector4f c = Vector4f( fillColor );
+        MR_HPDF_CHECK_RES_STATUS( HPDF_Page_SetRGBFill( state_->activePage, c.x, c.y, c.z ) );
+        MR_HPDF_CHECK_RES_STATUS( HPDF_Page_Rectangle( state_->activePage, rect.min.x, rect.min.y, rect.size().x, rect.size().y ) );
+        MR_HPDF_CHECK_RES_STATUS( HPDF_Page_Fill( state_->activePage ) );
+    }
+    if ( strokeColor.a )
+    {
+        Vector4f c = Vector4f( fillColor );
+        MR_HPDF_CHECK_RES_STATUS( HPDF_Page_SetRGBStroke( state_->activePage, c.x, c.y, c.z ) );
+        MR_HPDF_CHECK_RES_STATUS( HPDF_Page_Rectangle( state_->activePage, rect.min.x, rect.min.y, rect.size().x, rect.size().y ) );
+        MR_HPDF_CHECK_RES_STATUS( HPDF_Page_Stroke( state_->activePage ) );
+    }
+}
+
+void Pdf::drawTextCell_( const std::string& text, const TextCellParams& params )
+{
+    drawRect_( params.rect, params.colorBackground, params.colorBorder );
+    drawTextRect_( text, params.rect, params.textParams );
 }
 
 void Pdf::reset_()
@@ -629,9 +683,20 @@ int Pdf::calcTextLinesCount_( const std::string& text )
     return count;
 }
 
-bool Pdf::checkDocument() const
+bool Pdf::checkDocument_( const std::string& action ) const
 {
-    return state_->document && state_->activePage;
+    if ( !state_->document )
+    {
+        spdlog::warn( "Pdf: Can't {}: no valid document", action );
+        return false;
+    }
+    if ( !state_->activePage )
+    {
+        spdlog::warn( "Pdf: Can't {}: no valid page", action );
+        return false;
+    }
+
+    return true;
 }
 
 void Pdf::moveCursorToNewLine()
