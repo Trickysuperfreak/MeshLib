@@ -117,10 +117,13 @@ void AncillaryImGuiLabel::preDraw_()
     auto menu = getViewerInstance().getMenuPlugin();
     if ( !menu )
         return;
+    
+    //ImGuiMeasurementIndicators::Params _params;
+    //( void )_params;
 
-    ImGuiMeasurementIndicators::Params params;
-    if ( overrideParams_ )
-        params = *overrideParams_;
+    ImGuiMeasurementIndicators::Params params = overrideParams_ ? *overrideParams_ : ImGuiMeasurementIndicators::Params();
+    //if ( overrideParams_ )
+    //    params = *overrideParams_;
     if ( !params.list )
         return;
     if ( !overrideParams_ )
