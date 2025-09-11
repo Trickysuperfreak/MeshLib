@@ -53,10 +53,22 @@ jobs:
         if: ${{ steps.compare.outputs.need_vcpkg_update == 'true' }}
         id: bunmp-vcpkg
         env:
-          GH_TOKEN: ${{ secrets.MESHINSPECTOR_BOT_VCPKG_UPDATE_TOKEN }}
+          TOKEN: ${{ secrets.MESHINSPECTOR_BOT_VCPKG_UPDATE_TOKEN }}
+          USER: meshinspector-bot
+          EMAIL: ${{ secrets.MESHINSPECTOR_BOT_EMAIL }}@gmail.com
         run: |
-          git config --global user.email "${{ secrets.MESHINSPECTOR_BOT_EMAIL }}@gmail.com"
-          git config --global user.name "meshinspector-bot"
+          # Store the PAT in a file that can be accessed by the GitHub CLI
+          echo "$TOKEN" > token.txt
+          
+          # Authorize GitHub CLI for the current repository
+          gh auth login --with-token < token.txt
+          
+          # Setup the committers identity
+          gh auth setup-git
+          
+          # Setup the committers email and username
+          git config --global user.name "$USER"
+          git config --global user.email "$EMAIL"
           
           # Create new branch
           new_branch="vcpkg-update-${{ steps.get-latest-tag.outputs.latest_vcpkg_tag }}"
@@ -71,14 +83,14 @@ jobs:
           # Commit the changes
           git commit -am "Update vcpkg tag to ${{ steps.get-latest-tag.outputs.latest_vcpkg_tag }}"
 
-          # Push the changes
-          echo "${GH_TOKEN}" | gh auth login --with-token
+          # Push the feature branch to origin
           git push origin ${new_branch}
 
-          # Create a pull request using GitHub CLI
-          gh pr create --title "Bump vcpkg to ${{ steps.get-latest-tag.outputs.latest_vcpkg_tag }}" \
-                       --body "This PR updates the vcpkg tag to ${{ steps.get-latest-tag.outputs.latest_vcpkg_tag }}" \
-                       --base master \
-                       --head ${new_branch} \
-                       --label bump-vcpkg \
-                       --reviewer MaxRayskiy,Grantim
+          # Create a pull request in the remote repository
+          gh pr create \
+            --title "Bump vcpkg to ${{ steps.get-latest-tag.outputs.latest_vcpkg_tag }}" \
+            --body "This PR updates the vcpkg tag to ${{ steps.get-latest-tag.outputs.latest_vcpkg_tag }}" \
+            --head "$new_branch" \
+            --base "master" \
+            --label bump-vcpkg \
+            --reviewer MaxRayskiy,Grantim
