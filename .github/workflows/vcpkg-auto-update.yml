@@ -53,7 +53,7 @@ jobs:
         if: ${{ steps.compare.outputs.need_vcpkg_update == 'true' }}
         id: bunmp-vcpkg
         env:
-          GITHUB_TOKEN: ${{ secrets.MESHINSPECTOR_BOT_VCPKG_UPDATE_TOKEN }}
+          GH_TOKEN: ${{ secrets.MESHINSPECTOR_BOT_VCPKG_UPDATE_TOKEN }}
         run: |
           git config --global user.email "${{ secrets.MESHINSPECTOR_BOT_EMAIL }}@gmail.com"
           git config --global user.name "meshinspector-bot"
@@ -72,7 +72,7 @@ jobs:
           git commit -am "Update vcpkg tag to ${{ steps.get-latest-tag.outputs.latest_vcpkg_tag }}"
 
           # Push the changes
-          echo "${GITHUB_TOKEN}" | gh auth login --with-token
+          echo "${GH_TOKEN}" | gh auth login --with-token
           git push origin ${new_branch}
 
           # Create a pull request using GitHub CLI
